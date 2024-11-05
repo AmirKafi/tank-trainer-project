@@ -1,53 +1,50 @@
 import abc
 
+from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.Book import Book
-
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.orm import Session
 
 class AbstractBookRepository(abc.ABC):
     
     @abc.abstractmethod
     def add_book(self,book:Book)->Book:
-        NotImplementedError
+        raise NotImplementedError
         
     @abc.abstractmethod
     def update_book(self,book:Book)-> Book:
-        NotImplementedError
+        raise NotImplementedError
         
     @abc.abstractmethod
     def get_book_by_id(self,id:str)-> Book:
-        NotImplementedError
+        raise NotImplementedError
         
     @abc.abstractmethod
     def delete_book_by_id(self,id:str)->bool:
-        NotImplementedError
+        raise NotImplementedError
         
     @abc.abstractmethod
     def delete_book(self,book:Book)->bool:
-        NotImplementedError
+        raise NotImplementedError
         
-class BookRepository(AbstractBookRepository):
+class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
     def __init__(self,session:Session):
-        super().__init__()
-        self.session = session
+        super().__init__(session,Book)
     
     def add_book(self, book):
-        self.session.add(book)
-        self.session.commit()
+        super().add(book)
         return book
     
     def update_book(self, book):
         existing_book = self.get_book_by_id(book.id)  # Assuming `id` is an attribute of Book
         if existing_book:
-            existing_book = book
-            # Add other attributes as needed
-            self.session.commit()
+            existing_book.update(book.title,book.genres,book.release_date,book.publisher,book.price)
+            super().commit()
             return existing_book
         raise ValueError("Book not found.")
     
-    def get_book_by_id(self, id):
-        book = self.session.query(Book).filter(Book.id == id).one_or_none()
+    def get_book_by_id(self, id:str):
+        book = super().get(id)
         if book is None:
             raise NoResultFound("Book not found.")
         return book
@@ -55,16 +52,14 @@ class BookRepository(AbstractBookRepository):
     def delete_book_by_id(self, id: str) -> bool:
         try:
             book = self.get_book_by_id(id)
-            self.session.delete(book)
-            self.session.commit()
+            super().remove(book)
             return True  # Deletion was successful
         except NoResultFound:
             return False  # Book not found, deletion failed
     
     def delete_book(self, book: Book) -> bool:
         try:
-            self.session.delete(book)
-            self.session.commit()
+            super().remove(book)
             return True  # Deletion was successful
         except Exception as e:
             print(f"An error occurred: {e}")  # Optionally log the error

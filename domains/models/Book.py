@@ -31,7 +31,7 @@ class Book(Base):
         self._publisher = publisher
         self._price = price
         self._authors = Set[Author] = set()
-        
+
     def __eq__(self, other):
         if isinstance(other, Book):
             return self.id == other.id
@@ -42,7 +42,16 @@ class Book(Base):
     
     def __str__(self):
         return f"Title of the book : {self.title} \n Genre : {self.genres} \n Authors : {self.get_authors()}"
-    
+
+
+    def update(self,title:str,genres,release_date:date,publisher:str,price:int):
+        self._title = title
+        self._genres = genres
+        self._release_date = release_date
+        self._publisher = publisher
+        self._price = price
+        self._authors = Set[Author] = set()
+
     def set_authors(self,authors:list[Author]):
         for author in authors:
             if not isinstance(author, Author):

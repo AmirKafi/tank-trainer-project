@@ -38,7 +38,7 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
     def update_book(self, book):
         existing_book = self.get_book_by_id(book.id)  # Assuming `id` is an attribute of Book
         if existing_book:
-            existing_book.update(book.title,book.genres,book.release_date,book.publisher,book.price)
+            existing_book.update(book.title,book.genres,book.release_date,book.publisher,book.price,book.authors)
             self.session.add(existing_book)
             return existing_book
         raise ValueError("Book not found.")

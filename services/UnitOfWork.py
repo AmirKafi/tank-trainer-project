@@ -1,7 +1,19 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from services import config
+
+DEFAULT_SESSION = sessionmaker(
+    bind=create_engine(
+        config.get_postgres_uri(),
+        isolation_level="REPEATABLE READ",
+    )
+)
+
+
 class UnitOfWork:
-    from sqlalchemy.orm import Session
-    
-    def __init__(self, session: Session):
+
+    def __init__(self, session: Session = DEFAULT_SESSION):
         self.session = session
         self.repositories = {}
 

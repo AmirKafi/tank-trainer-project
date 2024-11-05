@@ -44,13 +44,13 @@ class Book(Base):
         return f"Title of the book : {self.title} \n Genre : {self.genres} \n Authors : {self.get_authors()}"
 
 
-    def update(self,title:str,genres,release_date:date,publisher:str,price:int):
+    def update(self,title:str,genres,release_date:date,publisher:str,price:int,authors:list[Author]):
         self._title = title
         self._genres = genres
         self._release_date = release_date
         self._publisher = publisher
         self._price = price
-        self._authors = Set[Author] = set()
+        self._authors = authors
 
     def set_authors(self,authors:list[Author]):
         for author in authors:

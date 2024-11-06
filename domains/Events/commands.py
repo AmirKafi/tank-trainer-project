@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from datetime import date
 
-from domains.models.Author import Author
-
 
 class Command:
     pass
@@ -14,7 +12,7 @@ class CreateBookCommand(Command):
     release_date:date
     publisher:str
     price:int
-    author_ids:list[str]
+    author_ids:list[int]
 
 @dataclass
 class UpdateBookCommand(Command):
@@ -23,4 +21,4 @@ class UpdateBookCommand(Command):
     release_date: date
     publisher: str
     price: int
-    author_ids:list[str]
+    author_ids:list[int]

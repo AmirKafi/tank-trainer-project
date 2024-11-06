@@ -1,6 +1,6 @@
 import os
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///G:/Projects/Practice/tank-trainer-project/database.db"
 
 def get_postgres_uri():
     host = os.environ.get("DB_HOST", "localhost")

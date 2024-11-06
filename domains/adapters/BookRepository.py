@@ -1,12 +1,18 @@
 import abc
+from abc import abstractmethod
 
 from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from domains.adapters.AuthorRepository import AuthorRepository
 from domains.models.Book import Book
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 class AbstractBookRepository(abc.ABC):
-    
+
+    @abstractmethod
+    def get_book_list(self):
+        raise NotImplementedError
+
     @abc.abstractmethod
     def add_book(self,book:Book)->Book:
         raise NotImplementedError
@@ -30,7 +36,12 @@ class AbstractBookRepository(abc.ABC):
 class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
     def __init__(self,session:Session):
         super().__init__(session,Book)
-    
+
+    def get_book_list(self):
+        books = super().list()
+
+        return books
+
     def add_book(self, book):
         super().add(book)
         return book

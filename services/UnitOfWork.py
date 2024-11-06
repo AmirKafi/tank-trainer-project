@@ -2,12 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from services import config
+from services.config import SQLALCHEMY_DATABASE_URL
 
 DEFAULT_SESSION = sessionmaker(
     bind=create_engine(
-        config.get_postgres_uri(),
-        isolation_level="REPEATABLE READ",
-    )
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False}  # Required for SQLite with FastAPI's async support
+)
 )
 
 

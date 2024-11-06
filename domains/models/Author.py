@@ -1,9 +1,16 @@
 from domains.models.City import City
-from sqlalchemy import UUID, Column, String,ForeignKey
+from sqlalchemy import UUID, Column, String, ForeignKey, Table
 from sqlalchemy.orm import declarative_base,relationship
 import uuid
 
 Base = declarative_base()
+
+book_author_association = Table(
+    "book_author_association", Base.metadata,
+    Column("book_id", UUID(as_uuid=True), ForeignKey("Books.Id"), primary_key=True),
+    Column("author_id", UUID(as_uuid=True), ForeignKey("Authors.Id"), primary_key=True)
+)
+
 #Author is an Entity that has a City along with it's other datas
 class Author(Base):
     __tablename__  = "Authors"
@@ -14,6 +21,7 @@ class Author(Base):
 
     # Define relationship with City
     _city = relationship("City", back_populates="_authors")
+    _books = relationship("Book", secondary=book_author_association, back_populates="_authors")
     
     def __init__(self,first_name:str,last_name:str,city:City):
         self._id = uuid.uuid4()

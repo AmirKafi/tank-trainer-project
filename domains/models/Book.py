@@ -1,11 +1,16 @@
 from datetime import date
 from typing import Set
 import uuid
-from sqlalchemy import UUID, Column, Date, String,Integer
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import UUID, Column, Date, String, Integer, Table, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
 from domains.models.Author import Author
 
 Base = declarative_base()
+book_author_association = Table(
+    "book_author_association", Base.metadata,
+    Column("book_id", UUID(as_uuid=True), ForeignKey("Books.Id"), primary_key=True),
+    Column("author_id", UUID(as_uuid=True), ForeignKey("Authors.Id"), primary_key=True)
+)
 
 # Book is the aggregate root and has multiple authors
 class Book(Base):
@@ -19,9 +24,9 @@ class Book(Base):
     _publisher = Column("Publisher", String, nullable=False)
     _price = Column("Price", Integer, nullable=False)
 
+    authors = relationship("Author", secondary=book_author_association, back_populates="_books")
     # Authors relationship; in practice, this would need an association table
     _authors: Set[Author] = set()  # Not mapped to database directly; manage with association table or manually
-
 
     def __init__(self,title:str,genres,release_date:date,publisher:str,price:int):
         self.id = uuid.uuid4()

@@ -1,5 +1,7 @@
 import os
 
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+
 def get_postgres_uri():
     host = os.environ.get("DB_HOST", "localhost")
     port = 5432 if host == "localhost" else 5432

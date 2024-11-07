@@ -2,7 +2,6 @@ import abc
 from abc import abstractmethod
 
 from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
-from domains.adapters.AuthorRepository import AuthorRepository
 from domains.models.Book import Book
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session

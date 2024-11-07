@@ -1,7 +1,6 @@
 import abc
 from abc import abstractmethod
 
-from Demos.win32ts_logoff_disconnected import session
 from sqlalchemy.orm import Session
 
 from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository

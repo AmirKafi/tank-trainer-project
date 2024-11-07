@@ -1,7 +1,6 @@
 import abc
 from abc import abstractmethod
 
-from requests import session
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 

@@ -1,8 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from services import config
-from services.config import SQLALCHEMY_DATABASE_URL
+from config import SQLALCHEMY_DATABASE_URL
 
 DEFAULT_SESSION = sessionmaker(
     bind=create_engine(

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 class Command:
@@ -9,8 +9,8 @@ class Command:
 class CreateBookCommand(Command):
     title:str
     genres:str
-    release_date:date
-    publisher:str
+    release_date:datetime
+    isbn:str
     price:int
     author_ids:list[int]
 
@@ -18,7 +18,7 @@ class CreateBookCommand(Command):
 class UpdateBookCommand(Command):
     id:str
     genres: str
-    release_date: date
-    publisher: str
+    release_date: datetime
+    isbn: str
     price: int
     author_ids:list[int]

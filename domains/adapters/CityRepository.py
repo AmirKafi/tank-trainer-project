@@ -4,7 +4,7 @@ from abc import abstractmethod
 from sqlalchemy.orm import Session
 
 from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
-from domains.models.City import City
+from domains.models.BookManagementModels import City
 
 
 class AbstractCityRepository(abc.ABC):

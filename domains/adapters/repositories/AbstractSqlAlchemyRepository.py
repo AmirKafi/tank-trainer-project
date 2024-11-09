@@ -4,7 +4,7 @@ from typing import Type, TypeVar, Generic, Optional
 from sqlalchemy.orm import Session
 
 Base = declarative_base()
-T = TypeVar('T', bound=Base)
+T = TypeVar('T')
 
 class AbstractSqlAlchemyRepository(Generic[T]):
     def __init__(self, session: Session, model: Type[T]):
@@ -13,9 +13,11 @@ class AbstractSqlAlchemyRepository(Generic[T]):
 
     def add(self, entity: T) -> None:
         self.session.add(entity)
+        self.session.commit()
 
     def remove(self, entity: T) -> None:
         self.session.delete(entity)
+        self.session.commit()
 
     def get(self, entity_id) -> Optional[T]:
         return self.session.get(self.model, entity_id)

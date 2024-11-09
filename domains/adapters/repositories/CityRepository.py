@@ -3,7 +3,7 @@ from abc import abstractmethod
 
 from sqlalchemy.orm import Session
 
-from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.BookManagementModels import City
 
 

@@ -4,8 +4,8 @@ from abc import abstractmethod
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
-from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
-from domains.adapters.CityRepository import CityRepository
+from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from domains.adapters.repositories.CityRepository import CityRepository
 from domains.models.BookManagementModels import Author
 
 
@@ -35,6 +35,6 @@ class AuthorRepository(AbstractSqlAlchemyRepository,AbstractAuthorRepository):
         for author in authors:
             city_repo = CityRepository(self.session)
             city = city_repo.get_city_by_id(author.city_id)
-            author.city = city
+            author.set_city(city)
 
         return authors

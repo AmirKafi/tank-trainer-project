@@ -6,7 +6,7 @@ class Event:
     pass
 
 @dataclass
-class SearchBooks(Event):
+class SearchBooksEvent(Event):
     search: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,

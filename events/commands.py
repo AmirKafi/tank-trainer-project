@@ -16,9 +16,31 @@ class CreateBookCommand(Command):
 
 @dataclass
 class UpdateBookCommand(Command):
-    id:str
+    id:int
     genres: str
     release_date: datetime
     isbn: str
     price: int
     author_ids:list[int]
+
+@dataclass
+class CreateMemberCommand(Command):
+    first_name:str
+    last_name:str
+    phone_number:str
+
+@dataclass
+class AddToMemberBalanceCommand(Command):
+    member_id:int
+    amount:int
+
+@dataclass
+class SetVIPMemberCommand(Command):
+    member_id:int
+
+@dataclass
+class ReserveBookCommand(Command):
+    book_id:int
+    member_id:int
+    duration:int
+    

@@ -1,99 +1,73 @@
-import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Table, create_engine
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from enum import Enum
 
-from config import SQLALCHEMY_DATABASE_URL
+from dateutil.relativedelta import relativedelta
 
-# Create a declarative base class
-Base = declarative_base()
+from domains.models.MemberManagementModels import Member
 
-# Define the association table for many-to-many relationship between Book and Author
-metadata = Base.metadata
 
-book_author_association = Table(
-    'book_author_association',
-    metadata,
-    Column('book_id', UUID(as_uuid=True), ForeignKey('books.id'), primary_key=True),
-    Column('author_id', Integer, ForeignKey('authors.id'), primary_key=True)
-)
-
-class City(Base):
-    __tablename__ = 'cities'
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-
-    # Relationship with Author
-    authors = relationship("Author", primaryjoin="City.id == Author.city_id", back_populates="city")
-
+class City:
     def __init__(self, title: str):
         self.title = title
 
     def __str__(self):
         return self.title
 
-    @property
-    def name(self):
-        return self.title
 
-
-class Author(Base):
-    __tablename__ = 'authors'
-
-    id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=True)
-
-    # Relationship with City
-    city = relationship('City', back_populates='authors')
-    books = relationship('Book', secondary=book_author_association, back_populates='authors')
-
+class Author:
     def __init__(self, first_name: str, last_name: str, city: City):
         self.first_name = first_name
         self.last_name = last_name
         self.city = city
 
     def __str__(self):
-        return self.first_name + ' ' + self.last_name
+        return f"{self.first_name} {self.last_name}"
 
-    @property
-    def city_name(self) -> str:
-        return self.city.title
+    def set_city(self, city: City):
+        self.city = city
 
 
-class Book(Base):
-    __tablename__ = 'books'
+class ReservationStatus(Enum):
+    RESERVED = 'Reserved',
+    PENDING = 'Pending'
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = Column(String, nullable=False)
-    genres = Column(String, nullable=False)
-    release_date = Column(DateTime, nullable=False)
-    isbn = Column(String, nullable=False, unique=True)
-    price = Column(Integer, nullable=False)
-
-    # Relationship with Author
-    authors = relationship("Author", secondary=book_author_association, back_populates="books")
-
-    def __init__(self, title: str, genres, release_date: datetime, isbn: str, price: int):
-        self.id = uuid.uuid4()
+class Book:
+    def __init__(self, title: str, genres: str, release_date: datetime, isbn: str, price: int):
         self.title = title
         self.genres = genres
         self.release_date = release_date
         self.isbn = isbn
         self.price = price
+        self.status = ReservationStatus.PENDING
+        self.reservation_id = 0
         self.authors = []
 
     def __str__(self):
-        return f"Title of the book: {self.title} \nGenre: {self.genres} \nAuthors: {self.get_authors()}"
+        return f"Title: {self.title}, Genre: {self.genres}, Authors: {self.get_authors()}"
 
-    def set_authors(self, author: Author):
-        if not isinstance(author, Author):
-            raise ValueError(f'{author} is not a valid Author')
-        self.authors.append(author)
+    def set_authors(self, authors):
+        if not isinstance(authors, list):
+            raise ValueError("Authors should be provided as a list")
+        self.authors = authors  # Directly assign the authors list instead of extending
 
     def get_authors(self):
+        if not self.authors:
+            return "No authors assigned"
         return ', '.join(f"{author.first_name} {author.last_name}" for author in self.authors)
+
+    def set_to_reserved(self,reservation_id:int):
+        self.status = ReservationStatus.RESERVED
+        self.reservation_id = reservation_id
+
+class Reservation:
+    def __init__(self,book_id:int,member_id:int,duration:int):
+        self.book_id = book_id
+        self.member_id = member_id
+        self.duration = duration
+        self.start_date = datetime.now()
+        self.end_date = datetime.now() + relativedelta(days=+ duration)
+        self.total_cost = 0
+        self.version = 1
+
+    def set_total_cost(self, total_cost):
+        self.total_cost = total_cost

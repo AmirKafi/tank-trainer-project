@@ -1,16 +1,17 @@
-import abc
-from abc import abstractmethod
+import logging
+from abc import abstractmethod,ABC
 from typing import Optional
 
-from domains.adapters.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
-from domains.adapters.CityRepository import CityRepository
+from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.BookManagementModels import Author
 from domains.models.BookManagementModels import Book
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session, joinedload
 
+logger = logging.getLogger("uvicorn.error")  # FastAPI integrates well with uvicorn logging
+logger.setLevel(logging.DEBUG)
 
-class AbstractBookRepository(abc.ABC):
+class AbstractBookRepository(ABC):
 
     @abstractmethod
     def get_book_list(self):
@@ -28,24 +29,28 @@ class AbstractBookRepository(abc.ABC):
         sort_by_price: str = 'asc'):
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @abstractmethod
     def add_book(self,book:Book)->Book:
         raise NotImplementedError
         
-    @abc.abstractmethod
+    @abstractmethod
     def update_book(self,book:Book)-> Book:
         raise NotImplementedError
         
-    @abc.abstractmethod
+    @abstractmethod
     def get_book_by_id(self,id:str)-> Book:
         raise NotImplementedError
         
-    @abc.abstractmethod
+    @abstractmethod
     def delete_book_by_id(self,id:str)->bool:
         raise NotImplementedError
         
-    @abc.abstractmethod
+    @abstractmethod
     def delete_book(self,book:Book)->bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_to_reserved(self,book:Book,reservation_id:int):
         raise NotImplementedError
         
 class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
@@ -99,13 +104,26 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
                 "isbn": book.isbn,
                 "release_date": book.release_date,
                 "price": book.price,
-                "authors": book.authors  # Add the list of authors
+                "status":book.status,
+                "authors": []  # Start with an empty list for authors
             }
 
+            # Iterate over the authors and serialize their data
+            for author in book.authors:
+                author_data = {
+                    "id": author.id,
+                    "first_name": author.first_name,
+                    "last_name": author.last_name,
+                    "city":{
+                        "id":author.city.id,
+                        "title":author.city.title
+                    }
+                }
+                book_data["authors"].append(author_data)
             result.append(book_data)
         # Pagination
 
-        return {"books": result}
+        return result
 
     def add_book(self, book):
         super().add(book)
@@ -140,5 +158,9 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
         except Exception as e:
             print(f"An error occurred: {e}")  # Optionally log the error
             return False  # An error occurred, deletion failed
+
+    def set_to_reserved(self, book:Book,reservation_id:int):
+        book.set_to_reserved(reservation_id)
+        super().add(book)
     
     

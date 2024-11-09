@@ -2,8 +2,8 @@ from fastapi import HTTPException
 
 from domains.adapters.repositories.AuthorRepository import AuthorRepository
 from domains.adapters.repositories.BookRepository import BookRepository, logger
-from events import CreateBookCommand
-from events import SearchBooksEvent
+from events.commands import CreateBookCommand
+from events.events import SearchBooksEvent
 from domains.models.BookManagementModels import Book
 from services.UnitOfWork import UnitOfWork
 

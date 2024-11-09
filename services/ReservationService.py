@@ -4,14 +4,14 @@ from domains.adapters.repositories.BookRepository import BookRepository
 from domains.adapters.repositories.MemberRepository import MemberRepository
 from domains.adapters.repositories.PaymentRepository import PaymentRepository
 from domains.adapters.repositories.ReservationRepository import ReservationRepository
-from events import ReserveBookCommand
+from events.commands import ReserveBookCommand
 from exceptions.BaseException import MaximumRegularMemberError, MaximumPremiumMemberError, BookIsReservedError
 from domains.models.BookManagementModels import Reservation, ReservationStatus
 from domains.models.MemberManagementModels import MembershipType
 from services.UnitOfWork import UnitOfWork
 
 
-def reserve_service(uow:UnitOfWork,cmd:ReserveBookCommand):
+def reserve_service(uow:UnitOfWork,cmd:ReserveBookCommand,member_id:int):
     with uow:
         try:
             repo = uow.get_repository(ReservationRepository)
@@ -21,7 +21,7 @@ def reserve_service(uow:UnitOfWork,cmd:ReserveBookCommand):
 
             reservation = Reservation(
                 cmd.book_id,
-                cmd.member_id,
+                member_id,
                 cmd.duration
             )
 
@@ -29,8 +29,8 @@ def reserve_service(uow:UnitOfWork,cmd:ReserveBookCommand):
             if book.status == ReservationStatus.RESERVED:
                 raise BookIsReservedError()
 
-            member = member_repo.get_member_by_id(cmd.member_id)
-            payments = payment_repo.get_payments_by_dates(cmd.member_id, reservation.start_date, reservation.end_date)
+            member = member_repo.get_member_by_id(member_id)
+            payments = payment_repo.get_payments_by_dates(member_id, reservation.start_date, reservation.end_date)
             total_cost = calculate_reservation_cost(member, book, cmd.duration, payments)
             reservation.set_total_cost(total_cost)
             new_reservation = repo.reserve(reservation)

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from config import OTP_EXPIRY_MINUTES, OTP_REQUEST_LIMIT_PER_2_MINUTES, OTP_REQUEST_LIMIT_PER_HOUR
 from exceptions.BaseException import NotValidPhoneNumberError, NoOTPRequestError, OTPExpiredError, \
     InvalidOTPError, OTPMaximumRequestInTwoMinutesError, OTPMaximumRequestInOneHourError
-from helpers import is_valid_mobile
+from helpers.PhoneNumberValidation import is_valid_mobile
 
 otp_store = {}
 otp_requests = defaultdict(list)

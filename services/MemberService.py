@@ -1,7 +1,6 @@
 from domains.adapters.repositories.MemberRepository import MemberRepository
 from domains.adapters.repositories.PaymentRepository import PaymentRepository
-from events import CreateMemberCommand, AddToMemberBalanceCommand, \
-    SetVIPMemberCommand
+from events.commands import CreateMemberCommand, AddToMemberBalanceCommand
 from domains.models.MemberManagementModels import Member
 from domains.models.PaymentModels import Payment
 from services.UnitOfWork import UnitOfWork
@@ -59,14 +58,17 @@ def get_member_by_phone_number_service(uow:UnitOfWork,phone_number:str):
         }
         return member_data
 
-def add_to_balance_service(uow:UnitOfWork,command:AddToMemberBalanceCommand):
+def add_to_balance_service(
+        uow:UnitOfWork,
+        member_id:int,
+        command:AddToMemberBalanceCommand):
     with uow:
         repo = uow.get_repository(MemberRepository)
         payment_repo = uow.get_repository(PaymentRepository)
-        payment_repo.add_payment(Payment(command.amount,command.member_id))
-        repo.add_to_balance(command.member_id,command.amount)
+        payment_repo.add_payment(Payment(command.amount,member_id))
+        repo.add_to_balance(member_id,command.amount)
 
-def set_to_vip_service(uow:UnitOfWork,command:SetVIPMemberCommand):
+def set_to_vip_service(uow:UnitOfWork,member_id:int):
     with uow:
         repo = uow.get_repository(MemberRepository)
-        repo.set_vip(command.member_id)
+        repo.set_vip(member_id)

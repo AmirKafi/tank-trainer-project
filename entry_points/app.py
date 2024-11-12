@@ -1,9 +1,9 @@
 import json
 import logging
 import threading
+from contextlib import asynccontextmanager
 from typing import Optional
 
-import redis
 from fastapi import FastAPI, Depends, Body
 from fastapi.encoders import jsonable_encoder
 
@@ -19,36 +19,33 @@ from events.commands import AddToMemberBalanceCommand, ReserveBookCommand, SetMe
 from events.events import OTPSendEvent
 from events.requests import ReserveBookRequest
 from helpers.json_web_token import create_jwt_token, get_current_member_id, JWTBearer
+from messaging.rabbitMQ_broker import RabbitMQBroker
 from services.OTPService import verify_otp
 from services.RedisCacheService import set_redis_cache, delete_redis_cache
 from services.UnitOfWork import UnitOfWork
 from services.handlres import member_handler, otp_handler
 
-redis_client = redis.Redis(host="localhost", port=6379, db=0)
 logger = logging.getLogger(__name__)
 
 msg_bus = bootstrap()
 
+@asynccontextmanager
 async def lifespan_context(app: FastAPI):
-    pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
-    pubsub.subscribe("otp_request")
-
-    def listen():
-        for msg in pubsub.listen():
-            handle_otp_request(msg)
-
-    thread = threading.Thread(target=listen, daemon=True)
-    thread.start()
-
+    rabbit = RabbitMQBroker()
+    rabbit.declare_queue('otp_request')
+    threading.Thread(
+        target=lambda: rabbit.consume_messages(queue_name='otp_request', callback=handle_otp_request),
+        daemon=True
+    ).start()
     yield
 
-    pubsub.close()
-    redis_client.close()
-    logger.info("Redis pubsub stopped")
+    rabbit.close_connection()
+    logger.info("rabbitMQ pubsub stopped")
 
-def handle_otp_request(msg):
-    data = json.loads(msg["data"])
-    event = events.OTPSendEvent(data['phone_number'])
+def handle_otp_request(ch,method,properties,msg):
+    data_str = msg.decode('utf-8')
+    data_dict = json.loads(data_str)
+    event = events.OTPSendEvent(data_dict.get("phone_number"))
     otp_handler.send_otp_handler(event)
 
 

@@ -39,7 +39,6 @@ class MessageBus:
 
     def handle(self, message: Message):
         self.queue = [message]
-        print(self.queue)
         while self.queue:
             message = self.queue.pop(0)
             logger.debug(type(message))

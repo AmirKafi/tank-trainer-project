@@ -3,7 +3,8 @@ import logging
 from typing import Callable
 
 from adapters import redis_publisher, table_mapping
-from messaging import message_bus
+from messaging import message_bus, rabbitMQ_broker
+from messaging.rabbitMQ_broker import RabbitMQBroker
 from services.UnitOfWork import UnitOfWork, AbstractUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 def bootstrap(
     start_orm: bool = True,
     uow: AbstractUnitOfWork = UnitOfWork(),
-    publish: Callable = redis_publisher.publish,
+    publish: Callable = RabbitMQBroker().publish_message,
 ) -> message_bus.MessageBus:
 
     if start_orm:

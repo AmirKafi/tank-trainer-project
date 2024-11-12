@@ -16,14 +16,14 @@ class SMSProviderInterface:
 
 class KaveNegarProvider(SMSProviderInterface):
     def send_otp(self, otp, phone_number):
-        print(f"KaveNegar: Sending OTP {otp} to {phone_number}")
+        print(f"KaveNegar: Sending OTP to {phone_number}")
         if random.choice([True, False]):
             raise Exception("KaveNegar is down!")
 
 class SignalProvider(SMSProviderInterface):
 
     def send_otp(self, otp,phone_number):
-        print(f"Signal: Sending OTP {otp} to {phone_number}")
+        print(f"Signal: Sending OTP to {phone_number}")
         if random.choice([True, False]):
             raise Exception("Signal is down!")
 
@@ -75,7 +75,8 @@ def generate_otp(phone_number:str):
     providers = [KaveNegarProvider(), SignalProvider()]
     circuit_breaker = CircuitBreaker(providers)
     circuit_breaker.send_otp(otp, phone_number)
-    return otp
+
+    print(f"OTP Verification Code: {otp}")
 
 # Verify OTP
 def verify_otp(phone_number:str, user_otp:int):

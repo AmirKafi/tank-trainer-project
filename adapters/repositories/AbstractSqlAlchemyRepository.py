@@ -1,3 +1,4 @@
+from sqlalchemy import Executable, Result
 from sqlalchemy.orm import Session, declarative_base
 
 from typing import Type, TypeVar, Generic, Optional
@@ -30,3 +31,6 @@ class AbstractSqlAlchemyRepository(Generic[T]):
 
     def rollback(self) -> None:
         self.session.rollback()
+
+    def execute(self,stmt:Executable)-> Result:
+        return self.session.execute(stmt)

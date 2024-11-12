@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Configuration settings (make sure these are defined in config)
 from config import JWT_ACCESS_TOKEN_EXPIRE_MINUTES, JWT_SECRET_KEY, JWT_ALGORITHM
+from services.RedisCacheService import get_redis_cache
 
 # Initialize Redis connection
 redis = redis.from_url("redis://localhost:6379", decode_responses=True)
@@ -17,7 +18,7 @@ class JWTBearer(HTTPBearer):
     async def __call__(self, request: Request):
         credentials: HTTPAuthorizationCredentials = await super(JWTBearer, self).__call__(request)
         data = get_current_user(credentials.credentials)
-        token_status = await redis.get(data["phone_number"])
+        token_status = await get_redis_cache(data["phone_number"])
         if credentials:
             if credentials.scheme != "Bearer":
                 raise HTTPException(status_code=403, detail="Invalid authentication scheme.")

@@ -1,93 +1,138 @@
+import json
+import logging
+import threading
 from typing import Optional
-import redis.asyncio as redis
-from fastapi import FastAPI, Depends
+
+import redis
+from fastapi import FastAPI, Depends, Body
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from config import SQLALCHEMY_DATABASE_URL, FastApi_metadata, JWT_ACCESS_TOKEN_EXPIRE_MINUTES
-from domains.adapters import table_mapping
-from events import events, commands
-from events.commands import AddToMemberBalanceCommand
-from exceptions.BaseException import MemberDoesNotExistError
+from adapters.repositories.AuthorRepository import AuthorRepository
+from adapters.repositories.BookRepository import BookRepository
+from adapters.repositories.CityRepository import CityRepository
+from adapters.repositories.MemberRepository import MemberRepository
+from adapters.repositories.ReservationRepository import ReservationRepository
+from bootstrap import bootstrap
+from config import FastApi_metadata, JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+from events import commands, events
+from events.commands import AddToMemberBalanceCommand, ReserveBookCommand, SetMemberVIPCommand
+from events.events import OTPSendEvent
+from events.requests import ReserveBookRequest
 from helpers.json_web_token import create_jwt_token, get_current_member_id, JWTBearer
-
-from services import CityService, AuthorService, BookService, MemberService
-from services.MemberService import get_member_by_phone_number_service, add_to_balance_service, set_to_vip_service
-from services.OTPService import generate_otp, verify_otp
-from services.ReservationService import reserve_service, get_reserved_books_service
+from services.OTPService import verify_otp
+from services.RedisCacheService import set_redis_cache, delete_redis_cache
 from services.UnitOfWork import UnitOfWork
+from services.handlres import member_handler, otp_handler
 
-app = FastAPI(openapi_tags=FastApi_metadata)
+redis_client = redis.Redis(host="localhost", port=6379, db=0)
+logger = logging.getLogger(__name__)
 
-# Initialize Redis connection
-redis = redis.from_url("redis://localhost:6379", decode_responses=True)
+msg_bus = bootstrap()
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-table_mapping.start_mappers()
+async def lifespan_context(app: FastAPI):
+    pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+    pubsub.subscribe("otp_request")
 
-@app.get("/OTPService/get_code",tags=['Authorization'])
-def generate_otp_code(phone_number:str):
+    def listen():
+        for msg in pubsub.listen():
+            handle_otp_request(msg)
+
+    thread = threading.Thread(target=listen, daemon=True)
+    thread.start()
+
+    yield
+
+    pubsub.close()
+    redis_client.close()
+    logger.info("Redis pubsub stopped")
+
+def handle_otp_request(msg):
+    data = json.loads(msg["data"])
+    event = events.OTPSendEvent(data['phone_number'])
+    otp_handler.send_otp_handler(event)
+
+
+app = FastAPI(lifespan=lifespan_context,openapi_tags=FastApi_metadata)
+
+@app.get("/otp/get-code", tags=['Authorization'])
+def generate_otp_code(phone_number: str):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member = get_member_by_phone_number_service(uow,phone_number)
-                if not member:
-                    raise MemberDoesNotExistError()
-
-                code = generate_otp(phone_number)
-                print(f"OTP Verification Code: {code}")
-                return {"message": "Code Retrieved Successfully!"}
+        event = OTPSendEvent(phone_number)
+        msg_bus.handle(event)
+        return {"message": "Code Sent!"}
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.get("/OTPService/verify_code",tags=['Authorization'])
-async def verify_otp_code(phone_number:str,code:str):
+@app.get("/otp/verify-code", tags=['Authorization'])
+async def verify_otp_code(phone_number: str, code: str):
     try:
-        result = verify_otp(phone_number,int(code))
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member = get_member_by_phone_number_service(uow,phone_number)
-                token = create_jwt_token({"UserData":jsonable_encoder(member)})
+        result = verify_otp(phone_number, int(code))
+        with UnitOfWork() as uow:
+            member = member_handler.get_member_by_phone_number_handler(uow, phone_number)
+            token = create_jwt_token({"UserData": jsonable_encoder(member)})
 
-                # Cache the token in Redis with expiration
-                await redis.setex(phone_number, JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,token)
+            # Cache the token in Redis with expiration
+            await set_redis_cache(phone_number, token, JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 
-                return {"Bearer":token}
+        return {"Bearer": token}
+
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.get("/Member/Dismiss")
-async def dismiss_member(phone_number:str):
+
+@app.get("/member/dismiss", tags=['Members'], dependencies=[Depends(JWTBearer())])
+async def dismiss_member(phone_number: str):
     try:
-        await redis.delete(phone_number)
+        await delete_redis_cache(phone_number)
         return {"message": "Member Dismissed"}
     except Exception as error:
         return {"error_message": str(error)}
 
 
-@app.get("/City/get_list", dependencies=[Depends(JWTBearer())])
+@app.get("/cities", dependencies=[Depends(JWTBearer())])
 def get_city_list():
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                city_list = CityService.get_city_list_service(uow)
-                return {"cities": city_list}
+        with UnitOfWork() as uow:
+            repo = uow.get_repository(CityRepository)
+            cities = repo.get_city_list()
+
+            city_list = []
+            for city in cities:
+                city_data = {
+                    "id": city.id,
+                    "title": city.title
+                }
+                city_list.append(city_data)
+            return {"cities": city_list}
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.get("/Author/get_list", dependencies=[Depends(JWTBearer())])
+
+@app.get("/authors", dependencies=[Depends(JWTBearer())])
 def get_author_list():
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                author_list = AuthorService.get_author_list_service(uow)
-                return {"authors": author_list}
+        with UnitOfWork() as uow:
+            repo = uow.get_repository(AuthorRepository)
+            authors = repo.get_author_list()
+            author_list = []
+            for author in authors:
+                city_data = {
+                    "id": author.id,
+                    "first_name": author.first_name,
+                    "last_name": author.last_name,
+                    "city": {
+                        "id": author.city.id,
+                        "title": author.city.title
+                    }
+                }
+                author_list.append(city_data)
+
+            return {"authors": author_list}
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.get("/books/get_list",tags=['Books'], dependencies=[Depends(JWTBearer())])
+
+@app.get("/books", tags=['Books'], dependencies=[Depends(JWTBearer())])
 def get_book_list(
         search: Optional[str] = None,
         min_price: Optional[float] = None,
@@ -99,86 +144,118 @@ def get_book_list(
         sort_by_price: str = 'asc'
 ):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                event = events.SearchBooksEvent(search, min_price, max_price, genres, city_id, page, per_page, sort_by_price)
-                books = BookService.get_book_list_filtered_service(uow, event)
-                return {"books": books}
+        with UnitOfWork() as uow:
+            repo = uow.get_repository(BookRepository)
+            books = repo.get_book_list_filtered(
+                search,
+                min_price,
+                max_price,
+                genres,
+                city_id,
+                page,
+                per_page,
+                sort_by_price)
+            return {"books": books}
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.post("/books", response_model=commands.CreateBookCommand, tags=['Books'], dependencies=[Depends(JWTBearer())])
+
+@app.post("/book", tags=['Books'], dependencies=[Depends(JWTBearer())])
 def create_book(command: commands.CreateBookCommand):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                BookService.add_book_service(uow,command)
-                return command
+        msg_bus.handle(command)
+        return "Ok"
     except Exception as error:
         return {"error_message": str(error)}
 
 
-@app.post("/Members/Deposit",tags=['Members'], dependencies=[Depends(JWTBearer())])
-def add_to_balance(command:AddToMemberBalanceCommand,token:str = Depends(JWTBearer())):
+@app.put("/book", tags=['Books'], dependencies=[Depends(JWTBearer())])
+def update_book(command: commands.UpdateBookCommand):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member_id = get_current_member_id(token)
-                add_to_balance_service(uow,member_id, command)
-                return {"message": "Balance Updated Successfully!"}
+        msg_bus.handle(command)
+        return "Ok"
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.post("/Books/Reserve",tags=['Books'], dependencies=[Depends(JWTBearer())])
-def reserve_book(cmd: commands.ReserveBookCommand,token:str = Depends(JWTBearer())):
+
+@app.post("/member/deposit", tags=['Members'], dependencies=[Depends(JWTBearer())])
+def add_to_balance(amount:int = Body(), token: str = Depends(JWTBearer())):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member_id = get_current_member_id(token)
-                reserved_book = reserve_service(uow, cmd,member_id)
-                return {"message": "Book is reserved successfully , enjoy"}
+        member_id = get_current_member_id(token)
+        command = AddToMemberBalanceCommand(member_id, amount)
+        msg_bus.handle(command)
+        return "Ok"
     except Exception as error:
+        raise error
         return {"error_message": str(error)}
 
-@app.get("/Members/get_reserved_books",tags=['Members'], dependencies=[Depends(JWTBearer())])
-def get_reserved_books(token:str = Depends(JWTBearer())):
+
+
+
+@app.post("/book/reserve", tags=['Books'], dependencies=[Depends(JWTBearer())])
+def reserve_book(req:ReserveBookRequest, token: str = Depends(JWTBearer())):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member_id = get_current_member_id(token)
-                books = get_reserved_books_service(uow, member_id)
-                return {"books": books}
+        member_id = get_current_member_id(token)
+        cmd = ReserveBookCommand(member_id, req.book_id,req.duration)
+        msg_bus.handle(cmd)
+        return "Ok"
     except Exception as error:
         return {"error_message": str(error)}
 
 
-@app.get("/Members/get_list",tags=['Members'], dependencies=[Depends(JWTBearer())])
+@app.get("/member/reserved-books", tags=['Members'], dependencies=[Depends(JWTBearer())])
+def get_reserved_books(token: str = Depends(JWTBearer())):
+    try:
+        with UnitOfWork() as uow:
+            member_id = get_current_member_id(token)
+            repo = uow.get_repository(ReservationRepository)
+            books = repo.get_reserved_books(member_id)
+            return {"books": books}
+    except Exception as error:
+        return {"error_message": str(error)}
+
+
+@app.get("/members", tags=['Members'], dependencies=[Depends(JWTBearer())])
 def get_member_list():
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                members = MemberService.get_members_service(uow)
-                return members
+        with UnitOfWork() as uow:
+            repo = uow.get_repository(MemberRepository)
+            members = repo.get_members_list()
+            result = []
+            for member in members:
+                # Now we can serialize the book with all the author data
+                member_data = {
+                    "id": member.id,
+                    "first_name": member.first_name,
+                    "last_name": member.last_name,
+                    "phone_number": member.phone_number,
+                    "membership_type": member.membership_type,
+                    "membership_expiry": member.membership_expiry,
+                    "balance": member.balance
+                }
+
+                result.append(member_data)
+
+            return {"Members": result}
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.post("/Members",tags=['Members'], dependencies=[Depends(JWTBearer())])
+
+@app.post("/member", tags=['Members'])
 def create_member(command: commands.CreateMemberCommand):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                MemberService.add_member_service(uow, command)
-                return command
+        msg_bus.handle(command)
+        return "Ok"
     except Exception as error:
         return {"error_message": str(error)}
 
-@app.post("/Members/SetVIP",tags=['Members'], dependencies=[Depends(JWTBearer())])
-def set_vip(token:str = Depends(JWTBearer())):
+
+@app.post("/member/set-vip", tags=['Members'], dependencies=[Depends(JWTBearer())])
+def set_vip(token: str = Depends(JWTBearer())):
     try:
-        with SessionLocal() as session:
-            with UnitOfWork(session) as uow:
-                member_id = get_current_member_id(token)
-                set_to_vip_service(uow,member_id)
-                return {"message":"You are now a Premium Member , enjoy your life"}
+        member_id = get_current_member_id(token)
+        cmd = SetMemberVIPCommand(member_id)
+        msg_bus.handle(cmd)
+        return "Ok"
     except Exception as error:
         return {"error_message": str(error)}

@@ -22,7 +22,6 @@ class RabbitMQBroker:
 
     def check_if_queue_exists(self, queue_name: str)->bool:
         try:
-            # Declare the queue with passive=True to check if it exists
             self.channel.queue_declare(queue=queue_name, passive=True)
             return True
         except AMQPChannelError:

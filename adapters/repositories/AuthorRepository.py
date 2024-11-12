@@ -1,11 +1,12 @@
 import abc
 from abc import abstractmethod
+from typing import Set
 
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
-from domains.adapters.repositories.CityRepository import CityRepository
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from adapters.repositories.CityRepository import CityRepository
 from domains.models.BookManagementModels import Author
 
 
@@ -23,6 +24,7 @@ class AbstractAuthorRepository(abc.ABC):
 class AuthorRepository(AbstractSqlAlchemyRepository,AbstractAuthorRepository):
     def __init__(self,session:Session):
         super().__init__(session,Author)
+        self.seen = set()  # type: Set[Author]
 
     def get_author_by_id(self, author_id):
         author = super().get(author_id)

@@ -1,15 +1,17 @@
-import logging
 from abc import abstractmethod,ABC
-from typing import Optional
+from platform import version
+from time import sleep
+from typing import Optional, Set
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from sqlalchemy import and_, update
+from sqlalchemy.orm.exc import StaleDataError
+
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.BookManagementModels import Author
 from domains.models.BookManagementModels import Book
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session, joinedload
-
-logger = logging.getLogger("uvicorn.error")  # FastAPI integrates well with uvicorn logging
-logger.setLevel(logging.DEBUG)
+from sqlalchemy.orm.attributes import set_committed_value
 
 class AbstractBookRepository(ABC):
 
@@ -34,15 +36,15 @@ class AbstractBookRepository(ABC):
         raise NotImplementedError
         
     @abstractmethod
-    def update_book(self,book:Book)-> Book:
+    def update_book(self,book:Book,book_id:int)-> Book:
         raise NotImplementedError
         
     @abstractmethod
-    def get_book_by_id(self,id:str)-> Book:
+    def get_book_by_id(self,id:int)-> Book:
         raise NotImplementedError
         
     @abstractmethod
-    def delete_book_by_id(self,id:str)->bool:
+    def delete_book_by_id(self,id:int)->bool:
         raise NotImplementedError
         
     @abstractmethod
@@ -55,6 +57,8 @@ class AbstractBookRepository(ABC):
         
 class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
     def __init__(self,session:Session):
+        self.seen = set()  # type: Set[Book]
+        self.session = session
         super().__init__(session,Book)
 
     def get_book_list(self):
@@ -71,32 +75,33 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
         per_page: int = 10,
         sort_by_price: str = 'asc'):
 
-        query = self.session.query(Book)
+        filters = []
 
-        # Filtering conditions
+        # Collect filter conditions
         if search:
-            query = query.filter(
-                (Book.title.ilike(f"%{search}%"))
-            )
+            filters.append(Book.title.ilike(f"%{search}%"))
         if min_price is not None:
-            query = query.filter(Book.price >= min_price)
+            filters.append(Book.price >= min_price)
         if max_price is not None:
-            query = query.filter(Book.price <= max_price)
+            filters.append(Book.price <= max_price)
         if genres is not None:
-            query = query.filter(Book.genres == genres)
+            filters.append(Book.genres.ilike(f"%{genres}%"))
         if city_id is not None:
-            query = query.options(joinedload(Book.authors).joinedload(Author.city))
-            query = query.filter(Author.city_id == city_id)
+            filters.append(Author.city_id == city_id)
 
         # Sorting
         sort_order = Book.price.asc() if sort_by_price == 'asc' else Book.price.desc()
-        query = query.order_by(sort_order)
 
-        books = query.options(joinedload(Book.authors).joinedload(Author.city)).offset((page - 1) * per_page).limit(per_page).all()
+        books = (self.session
+                 .query(Book)
+                 .options(joinedload(Book.authors)
+                          .joinedload(Author.city))
+                 .filter(and_(*filters))
+                 .order_by(sort_order)
+                 .offset((page-1)*per_page)).all()
+
         result = []
-
         for book in books:
-            # Now we can serialize the book with all the author data
             book_data = {
                 "id": book.id,
                 "title": book.title,
@@ -104,7 +109,7 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
                 "isbn": book.isbn,
                 "release_date": book.release_date,
                 "price": book.price,
-                "status":book.status,
+                "status":book.status.value,
                 "authors": []  # Start with an empty list for authors
             }
 
@@ -121,29 +126,62 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
                 }
                 book_data["authors"].append(author_data)
             result.append(book_data)
-        # Pagination
 
         return result
 
     def add_book(self, book):
         super().add(book)
+        self.seen.add(book)
         return book
-    
-    def update_book(self, book):
-        existing_book = self.get_book_by_id(book.id)  # Assuming `id` is an attribute of Book
-        if existing_book:
-            existing_book.update(book.title,book.genres,book.release_date,book.isbn,book.price,book.authors)
-            self.session.add(existing_book)
-            return existing_book
-        raise ValueError("Book not found.")
-    
-    def get_book_by_id(self, id:str):
+
+    def update_book(self, book, book_id):
+        # Step 1: Retrieve the existing book by ID for version control and update
+        existing_book = self.get_book_by_id(book_id)
+
+        # Log version information for debugging
+        print(f"Existing version: {existing_book.version}, Book version: {book.version}")
+
+        # Step 2: Update scalar fields only
+        stmt = (
+            update(Book)
+            .where(and_(Book.id == book_id, Book.version == existing_book.version))
+            .values(
+                title=book.title,
+                genres=book.genres,
+                release_date=book.release_date,
+                isbn=book.isbn,
+                price=book.price,
+                version=existing_book.version
+            )
+        )
+        print(str(stmt.compile(compile_kwargs={"literal_binds": True})))
+        print(f"Executing update with: {stmt}")
+
+        result = super().execute(stmt)
+
+        # Check for stale data
+        if result.rowcount == 0:
+            raise StaleDataError("The book has been modified by another transaction.")
+
+        # Step 3: Update authors relationship
+        # Directly assign the authors list to the existing_book's authors relationship
+        existing_book.authors = book.authors
+
+        # Commit the session to save changes in both scalar fields and relationships
+        self.session.flush()  # Flush pending changes to the database
+        self.session.refresh(existing_book)  # Refresh to reflect the new state
+        self.session.commit()
+
+        # Optional: Print for confirmation
+        print("Book updated successfully with new authors and version.")
+
+    def get_book_by_id(self, id:int):
         book = super().get(id)
         if book is None:
             raise NoResultFound("Book not found.")
         return book
     
-    def delete_book_by_id(self, id: str) -> bool:
+    def delete_book_by_id(self, id: int) -> bool:
         try:
             book = self.get_book_by_id(id)
             super().remove(book)
@@ -161,6 +199,17 @@ class BookRepository(AbstractSqlAlchemyRepository,AbstractBookRepository):
 
     def set_to_reserved(self, book:Book,reservation_id:int):
         book.set_to_reserved(reservation_id)
+        existing_book = self.get_book_by_id(book.id)
+        stmt = (
+            update(Book)
+            .where(and_(Book.version == existing_book.version))
+            .values(
+                status=book.status,
+                version=book.version+1 )
+        )
+        result = super().execute(stmt)
+        if not result:
+            raise StaleDataError("The book has been modified by another transaction.")
         super().add(book)
     
     

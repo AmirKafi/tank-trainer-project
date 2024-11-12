@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.PaymentModels import Payment
 
 
@@ -18,6 +18,7 @@ class AbstractPaymentRepository(ABC):
 class PaymentRepository(AbstractSqlAlchemyRepository,AbstractPaymentRepository):
     def __init__(self,session):
         self.session = session
+        self.seen = set[Payment]
         super().__init__(session,Payment)
 
     def add_payment(self, payment:Payment):

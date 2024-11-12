@@ -3,7 +3,7 @@ from abc import abstractmethod
 
 from sqlalchemy.orm import Session
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.BookManagementModels import City
 
 
@@ -24,6 +24,7 @@ class AbstractCityRepository(abc.ABC):
 class CityRepository(AbstractSqlAlchemyRepository,AbstractCityRepository):
     def __init__(self, session: Session):
         super().__init__(session, City)
+        self.seen = set[City]
 
     def add_city(self, city)-> City:
         new_city = City(city.title)

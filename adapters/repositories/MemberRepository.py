@@ -2,7 +2,7 @@ from abc import abstractmethod,ABC
 
 from sqlalchemy.orm import Session
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.MemberManagementModels import Member
 
 
@@ -36,6 +36,7 @@ class AbstractMemberRepository(ABC):
 class MemberRepository(AbstractSqlAlchemyRepository,AbstractMemberRepository):
     def __init__(self,session:Session):
         super().__init__(session,Member)
+        self.seen = set[Member]
 
     def get_members_list(self):
         members = super().list()

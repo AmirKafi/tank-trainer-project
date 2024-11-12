@@ -10,7 +10,6 @@ from domains.models.PaymentModels import Payment
 
 # Initialize a registry
 mapper_registry = registry()
-
 # Define the association table for many-to-many relationship between Book and Author
 metadata = mapper_registry.metadata
 
@@ -47,7 +46,8 @@ book_table = Table(
     Column('release_date', DateTime, nullable=False),
     Column('isbn', String, nullable=False, unique=True),
     Column('price', Integer, nullable=False),
-    Column('status', Enum(ReservationStatus), nullable=False, default=ReservationStatus.PENDING)
+    Column('status', Enum(ReservationStatus), nullable=False, default=ReservationStatus.PENDING),
+    Column('version', Integer, nullable=False)
 )
 
 reservation_table = Table(
@@ -58,10 +58,8 @@ reservation_table = Table(
     Column("member_id", Integer, ForeignKey('members.id'), nullable=False),
     Column("start_date", DateTime, nullable=False),
     Column("end_date", DateTime, nullable=False),
-    Column("total_cost", Integer, nullable=False),
-    Column("version", Integer, default=1, nullable=False)
+    Column("total_cost", Integer, nullable=False)
 )
-
 
 member_table = Table(
     'members',
@@ -78,18 +76,25 @@ member_table = Table(
 payment_table = Table(
     'payments',
     metadata,
-Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("amount",Integer, nullable=False,default=0),
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("amount", Integer, nullable=False, default=0),
     Column("member_id", Integer, ForeignKey('members.id'), nullable=False),
-    Column('payment_date',DateTime, nullable=False,default=datetime.now()),
+    Column('payment_date', DateTime, nullable=False, default=datetime.now()),
 )
 
 # Initialize database and session
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_size=10,            # Maximum number of connections in the pool
+    max_overflow=20,         # Additional connections allowed beyond pool_size
+    pool_timeout=30,         # Timeout for retrieving a connection from the pool
+    pool_recycle=1800,       # Time after which to recycle the connection
+)
 mapper_registry.metadata.create_all(engine)  # Ensure tables are created
 
 Session = sessionmaker(bind=engine)
 session = Session()
+
 
 # Initialize tables and sample data
 def init_db():
@@ -104,47 +109,40 @@ def init_db():
             {"first_name": "Chinua", "last_name": "Achebe"},
         ]
 
-        # Initialize cities
-        cities = []
-        for city_name in city_names:
-            city = db.query(City).filter(City.title == city_name).first()
-            if not city:
+        # Initialize cities and authors only if they don't exist
+        existing_cities = db.query(City.title).all()
+        if not existing_cities:
+            for city_name in city_names:
                 city = City(title=city_name)
                 db.add(city)
-                db.commit()
-                db.refresh(city)
                 print(f"City '{city_name}' created.")
-            cities.append(city)
 
-        # Initialize authors
-        for i, author_info in enumerate(author_names):
-            city = cities[i % len(cities)]  # Assign each author a city, cycling if necessary
-            author = db.query(Author).filter(
-                Author.first_name == author_info["first_name"],
-                Author.last_name == author_info["last_name"]
-            ).first()
-            if not author:
+        existing_authors = db.query(Author.first_name, Author.last_name).all()
+        if not existing_authors:
+            for i, author_info in enumerate(author_names):
+                city = db.query(City).filter(City.title == city_names[i % len(city_names)]).first()
                 author = Author(
                     first_name=author_info["first_name"],
                     last_name=author_info["last_name"],
                     city=city
                 )
                 db.add(author)
-                db.commit()
-                db.refresh(author)
                 print(f"Author '{author_info['first_name']} {author_info['last_name']}' created in city '{city.title}'.")
+
+        db.commit()  # Commit all changes at once
     finally:
         db.close()
 
+
+
 # Define the mapping manually
 def start_mappers():
-
     mapper_registry.map_imperatively(
         Member,
         member_table,
         properties={
-            'payments' : relationship(Payment, backref='member', cascade="all, delete-orphan"),
-            'reservations':relationship(Reservation,back_populates='member')
+            'payments': relationship(Payment, backref='member', cascade="all, delete-orphan"),
+            'reservations': relationship(Reservation, back_populates='member')
         }
     )
     mapper_registry.map_imperatively(
@@ -160,7 +158,7 @@ def start_mappers():
         author_table,
         properties={
             'city': relationship(City, back_populates="authors"),
-            'books': relationship("Book", secondary=book_author_association, back_populates="authors",default=list)
+            'books': relationship("Book", secondary=book_author_association, back_populates="authors", default=list)
         }
     )
 
@@ -173,6 +171,7 @@ def start_mappers():
         }
     )
 
+
     mapper_registry.map_imperatively(
         Payment,
         payment_table
@@ -181,9 +180,10 @@ def start_mappers():
     mapper_registry.map_imperatively(
         Reservation,
         reservation_table,
+
         properties={
             'book': relationship(Book, back_populates="reservation", foreign_keys=[reservation_table.c.book_id]),
-            'member':relationship(Member,back_populates='reservations')
+            'member': relationship(Member, back_populates='reservations')
         }
     )
 

@@ -2,7 +2,7 @@ from abc import abstractmethod,ABC
 
 from sqlalchemy.orm import Session, joinedload
 
-from domains.adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
+from adapters.repositories.AbstractSqlAlchemyRepository import AbstractSqlAlchemyRepository
 from domains.models.BookManagementModels import Reservation
 
 
@@ -20,6 +20,7 @@ class AbstractReservationRepository(ABC):
 class ReservationRepository(AbstractSqlAlchemyRepository,AbstractReservationRepository):
     def __init__(self,session:Session):
         super().__init__(session,Reservation)
+        self.seen = set[Reservation]
 
     def reserve(self,reservation:Reservation):
         super().add(reservation)

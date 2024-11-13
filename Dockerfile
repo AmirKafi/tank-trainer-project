@@ -1,18 +1,17 @@
-# Use official Python image
 FROM python:3.12
 
-# Install dependencies
+WORKDIR /usr/local/app
+
 RUN apt-get update && apt-get install -y libpq-dev
 
-# Set work directory
-WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install requirements
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# Copy the FastAPI app files
 COPY . .
+EXPOSE 5000
 
-# Run FastAPI with uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+RUN useradd app
+USER app
+
+CMD ["uvicorn", "entry_points.app:app", "--host", "0.0.0.0", "--port", "5000"]

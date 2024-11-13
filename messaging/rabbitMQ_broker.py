@@ -1,10 +1,19 @@
+import os
+
 import pika
 from pika.exceptions import AMQPChannelError
 
+from dotenv import load_dotenv
+
+from config import RABBITMQ_URL
+if RABBITMQ_URL is None:
+    raise ValueError("RABBITMQ_URL environment variable is not set.")
 
 class RabbitMQBroker:
-    def __init__(self, host: str = 'localhost'):
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+    def __init__(self):
+        self.connection = pika.BlockingConnection(
+            pika.URLParameters(RABBITMQ_URL)
+        )
         self.channel = self.connection.channel()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -20,7 +29,7 @@ class RabbitMQBroker:
 
         self.channel.basic_publish(exchange='', routing_key=queue_name, body=message)
 
-    def check_if_queue_exists(self, queue_name: str)->bool:
+    def check_if_queue_exists(self, queue_name: str) -> bool:
         try:
             self.channel.queue_declare(queue=queue_name, passive=True)
             return True

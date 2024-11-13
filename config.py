@@ -1,6 +1,14 @@
 import os
 
-SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://postgres:admin@localhost/Booking_DB"
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="DatabaseConf.env")
+load_dotenv(dotenv_path="RabbitMQConf.env")
+load_dotenv(dotenv_path="RedisConf.env")
+
+SQLALCHEMY_DATABASE_URL = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:5432/{os.getenv('POSTGRES_DB')}"
+
+RABBITMQ_URL = os.getenv('RABBITMQ_URL')
 
 MEMBER_PREMIUM_COST=1000
 MEMBER_PREMIUM_Period_Month= 1
@@ -18,9 +26,10 @@ JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 def get_redis_host_and_port():
-    host = os.environ.get("REDIS_HOST", "localhost")
-    port = 63791 if host == "localhost" else 6379
-    return dict(host=host, port=port)
+    host = os.getenv("REDIS_HOST")
+    return dict(host=host, port=6379)
+
+
 
 FastApi_metadata = [
     {

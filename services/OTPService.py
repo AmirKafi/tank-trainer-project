@@ -1,6 +1,9 @@
+import logging
 import random
 from collections import defaultdict
 from datetime import datetime, timedelta
+
+from uvicorn.config import LOG_LEVELS
 
 from config import OTP_EXPIRY_MINUTES, OTP_REQUEST_LIMIT_PER_2_MINUTES, OTP_REQUEST_LIMIT_PER_HOUR
 from exceptions.BaseException import NotValidPhoneNumberError, NoOTPRequestError, OTPExpiredError, \
@@ -9,6 +12,8 @@ from helpers.PhoneNumberValidation import is_valid_mobile
 
 otp_store = {}
 otp_requests = defaultdict(list)
+
+logger = logging.getLogger(__name__)
 
 class SMSProviderInterface:
     def send_otp(self, otp, phone_number):

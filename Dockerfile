@@ -2,7 +2,9 @@ FROM python:3.12 as builder
 
 WORKDIR /usr/local/app
 
-RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update  \
+    && apt-get install -y --no-install-recommends libpq-dev  \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
@@ -24,4 +26,4 @@ EXPOSE 5000
 RUN useradd -m app && chown -R app /usr/local/app
 USER app
 
-CMD ["uvicorn", "entry_points.app:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["uvicorn", "entry_points.app:app", "--host", "0.0.0.0", "--port", "5000","--reload"]

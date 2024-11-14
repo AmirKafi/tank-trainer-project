@@ -1,4 +1,4 @@
-FROM python:3.12
+FROM python:3.12 as builder
 
 WORKDIR /usr/local/app
 
@@ -8,8 +8,17 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-EXPOSE 5000
 
+FROM python:3.12
+
+WORKDIR /usr/local/app
+
+COPY --from=builder /usr/local/app /usr/local/app
+COPY --from=builder /usr/local /usr/local
+
+ENV PATH=/usr/local/bin:$PATH
+
+EXPOSE 5000
 
 RUN useradd app
 USER app
